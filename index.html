@@ -558,39 +558,22 @@
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var payload = JSON.parse(e.postData.contents);
-
-    // 送信データ(formType)から該当するタブ名を取得
     var formType = payload.formType || "業務改善意見書";
     var sheet = ss.getSheetByName(formType);
-
-    // タブが存在しない場合は自動で新規作成
-    if (!sheet) {
-      sheet = ss.insertSheet(formType);
-    }
-
+    if (!sheet) { sheet = ss.insertSheet(formType); }
     var lastCol = Math.max(sheet.getLastColumn(), 1);
     var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-
-    // 1行目が空の場合は初期ヘッダーをセット
     if (headers.length === 1 && headers[0] === "") {
       headers = ["送信日時", "所属医院", "氏名"];
       sheet.getRange(1, 1, 1, 3).setValues([headers]);
       lastCol = 3;
     }
-
     headers = headers.map(function(h) { return h.toString().trim(); });
-
-    var rowData = {};
-    rowData["送信日時"] = payload.timestamp;
-    rowData["所属医院"] = payload.clinic;
-    rowData["氏名"] = payload.name;
-
+    var rowData = { "送信日時": payload.timestamp, "所属医院": payload.clinic, "氏名": payload.name };
     var responses = payload.data;
     for (var question in responses) {
       var qTrim = question.trim();
       var headerIndex = headers.indexOf(qTrim);
-
-      // 新規質問項目があれば列を自動追加
       if (headerIndex === -1) {
         sheet.getRange(1, lastCol + 1).setValue(qTrim);
         headers.push(qTrim);
@@ -599,23 +582,52 @@
       }
       rowData[qTrim] = responses[question];
     }
-
     var newRow = [];
     for (var i = 0; i < headers.length; i++) {
       var hName = headers[i];
       newRow.push(rowData[hName] !== undefined ? rowData[hName] : "");
     }
-
     sheet.appendRow(newRow);
-
     return ContentService.createTextOutput(JSON.stringify({ "result": "success", "tab": formType }))
       .setMimeType(ContentService.MimeType.JSON);
-
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ "result": "error", "error": err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
+  }
+}
+
+function doGet(e) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("名簿");
+    if (!sheet) {
+      return ContentService.createTextOutput(JSON.stringify({ "result": "error", "message": "名簿シートが見つかりません" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    var data = sheet.getDataRange().getValues();
+    if (data.length < 2) {
+      return ContentService.createTextOutput(JSON.stringify({ "result": "success", "staff": {} }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    var headers = data[0];
+    var staffData = {};
+    for (var j = 0; j < headers.length; j++) {
+      var clinicName = headers[j].toString().trim();
+      if (clinicName) {
+        staffData[clinicName] = [];
+        for (var i = 1; i < data.length; i++) {
+          var name = data[i][j] ? data[i][j].toString().trim() : "";
+          if (name) { staffData[clinicName].push(name); }
+        }
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify({ "result": "success", "staff": staffData }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ "result": "error", "error": err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
   }
 }</textarea>
                         </div>
