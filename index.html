@@ -139,6 +139,13 @@
         <!-- Step 2: Staff Name Selection -->
         <div id="step2" class="step-transition hidden">
             <div class="bg-white rounded-2xl border-t-8 border-t-blue-600 border border-slate-200 shadow-sm p-6 space-y-6">
+                <!-- 名簿が長いので、上にも戻るボタンを置く -->
+                <div class="-mb-4">
+                    <button onclick="goToStep(1)" class="inline-flex items-center space-x-2 text-slate-500 hover:text-slate-800 font-semibold text-sm transition py-2 px-3 -ml-3 rounded-lg hover:bg-slate-50">
+                        <i class="fa-solid fa-chevron-left"></i>
+                        <span>医院選択に戻る</span>
+                    </button>
+                </div>
                 <div class="text-center space-y-2">
                     <span class="inline-block bg-blue-50 text-blue-700 text-xs px-3 py-1 rounded-full font-bold">STEP 2</span>
                     <h2 class="text-xl md:text-2xl font-bold text-slate-900"><span id="selectedClinicHeader" class="text-blue-600"></span> 職員選択</h2>
@@ -388,18 +395,49 @@
             localStorage.setItem("gassankai_overtime_form_state_v1", JSON.stringify(appState));
         }
 
+        // 名簿の読み込み状態（loading: 読み込み中 / ready: 表示できる / error: 読み込めなかった）
+        let staffStatus = "loading";
+
+        // 見本の名前（テストネーム）ではない、実際の名簿かどうか
+        function isRealRoster(staff) {
+            const names = Object.values(staff || {}).flat();
+            return names.length > 0 && !names.some(n => String(n).includes("テストネーム"));
+        }
+
+        // 名簿の画面を開いている途中で読み込みが終わったら、その場で表示し直す
+        function refreshStaffListIfOpen() {
+            const step2 = document.getElementById("step2");
+            if (step2 && !step2.classList.contains("hidden") && currentSubmission.clinic) {
+                renderStaffList(currentSubmission.clinic);
+                filterStaff();
+            }
+        }
+
         function fetchStaffFromSpreadsheet() {
-            if (!appState.gasURL || appState.gasURL.trim() === "") return;
+            // 前回取得した名簿が端末にあれば、それを先に使う（最新の名簿は裏で取り直す）
+            staffStatus = isRealRoster(appState.staff) ? "ready" : "loading";
+            if (!appState.gasURL || appState.gasURL.trim() === "") {
+                if (staffStatus !== "ready") staffStatus = "error";
+                return;
+            }
 
             fetch(appState.gasURL)
                 .then(response => response.json())
                 .then(data => {
-                    if (data.result === "success" && data.staff && Object.keys(data.staff).length > 0) {
+                    if (data.result === "success" && isRealRoster(data.staff)) {
                         appState.staff = data.staff;
                         saveStateToStorage();
+                        staffStatus = "ready";
+                    } else if (staffStatus !== "ready") {
+                        staffStatus = "error";
                     }
+                    refreshStaffListIfOpen();
                 })
-                .catch(err => console.log("名簿自動同期スキップ:", err));
+                .catch(err => {
+                    console.log("名簿自動同期スキップ:", err);
+                    if (staffStatus !== "ready") staffStatus = "error";
+                    refreshStaffListIfOpen();
+                });
         }
 
         function resetCurrentSubmissionAnswers() {
@@ -471,6 +509,28 @@
         function renderStaffList(clinicName) {
             const container = document.getElementById("staffListGrid");
             container.innerHTML = "";
+
+            // 名簿の読み込みが終わるまでは、見本の名前を出さずに待つ
+            if (staffStatus === "loading") {
+                container.innerHTML = `
+                    <div class="col-span-full py-10 text-center text-slate-500 bg-white border border-slate-200 rounded-2xl">
+                        <div class="w-8 h-8 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-3"></div>
+                        名簿を読み込んでいます…<br><span class="text-xs text-slate-400">数秒かかることがあります</span>
+                    </div>
+                `;
+                return;
+            }
+            if (staffStatus === "error") {
+                container.innerHTML = `
+                    <div class="col-span-full py-8 text-center text-slate-500 bg-white border border-slate-200 rounded-2xl space-y-3">
+                        <i class="fa-solid fa-triangle-exclamation text-2xl text-amber-500 block"></i>
+                        <p>名簿を読み込めませんでした。<br>通信環境を確認して、ページを再読み込みしてください。</p>
+                        <button type="button" onclick="location.reload()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2 rounded-xl text-sm transition">再読み込み</button>
+                    </div>
+                `;
+                return;
+            }
+
             const staffArray = appState.staff[clinicName] || [];
 
             if (staffArray.length === 0) {
