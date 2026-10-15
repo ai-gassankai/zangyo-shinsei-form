@@ -642,16 +642,46 @@
                     card.appendChild(inputElement);
 
                 } else if (field.type === "time") {
-                    inputElement = document.createElement("input");
-                    inputElement.type = "time";
+                    // 時・分を選ぶ形式（分は 00／15／30／45 のみ）。ブラウザの時刻入力は15分刻みを守れない（スマホでは無視される）ため
+                    inputElement = document.createElement("div");
                     inputElement.id = field.id;
-                    inputElement.step = "900"; // 15-minute increments
-                    inputElement.className = "w-full md:w-48 pb-2 border-b border-slate-300 focus:border-blue-600 focus:outline-none text-sm md:text-base bg-transparent pt-1 transition duration-150";
-                    inputElement.value = currentSubmission.answers[field.id] || "";
-                    inputElement.onchange = (e) => { 
-                        currentSubmission.answers[field.id] = e.target.value; 
+                    inputElement.className = "flex items-center gap-2 text-sm md:text-base text-slate-700";
+                    const [curH, curM] = (currentSubmission.answers[field.id] || "").split(":");
+                    const makeSelect = (values, current, label) => {
+                        const sel = document.createElement("select");
+                        sel.setAttribute("aria-label", label);
+                        sel.className = "pb-2 border-b border-slate-300 focus:border-blue-600 focus:outline-none text-sm md:text-base bg-transparent pt-1 transition duration-150";
+                        const empty = document.createElement("option");
+                        empty.value = "";
+                        empty.textContent = "--";
+                        sel.appendChild(empty);
+                        values.forEach(v => {
+                            const opt = document.createElement("option");
+                            opt.value = v;
+                            opt.textContent = v;
+                            if (v === current) opt.selected = true;
+                            sel.appendChild(opt);
+                        });
+                        return sel;
+                    };
+                    const hourSel = makeSelect(Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")), curH, "時");
+                    const minSel = makeSelect(["00", "15", "30", "45"], curM, "分");
+                    const update = () => {
+                        if (hourSel.value && !minSel.value) minSel.value = "00";  // 時だけ選んだら分は00にする
+                        if (!hourSel.value) minSel.value = "";
+                        inputElement.dataset.partial = "";
+                        currentSubmission.answers[field.id] = hourSel.value && minSel.value ? `${hourSel.value}:${minSel.value}` : "";
                         clearFieldWarning(field.id);
                     };
+                    hourSel.onchange = update;
+                    minSel.onchange = () => {
+                        // 分だけ選んで時が未選択のときは、送信前の確認で知らせる
+                        inputElement.dataset.partial = minSel.value && !hourSel.value ? "1" : "";
+                        currentSubmission.answers[field.id] = hourSel.value && minSel.value ? `${hourSel.value}:${minSel.value}` : "";
+                        clearFieldWarning(field.id);
+                    };
+                    const unit = text => { const s = document.createElement("span"); s.textContent = text; return s; };
+                    inputElement.append(hourSel, unit("時"), minSel, unit("分"));
                     card.appendChild(inputElement);
 
                 } else if (field.type === "select") {
@@ -872,6 +902,7 @@
                 }
                 if (errorAlert) {
                     errorAlert.classList.add("hidden");
+                    errorAlert.querySelector("span").textContent = "この質問は必須です";
                 }
 
                 if (field.required) {
@@ -897,8 +928,28 @@
                 }
             });
 
+            // 時刻：分だけ選んで時が未選択／終了が開始と同じか前
+            const markFieldError = (id, message) => {
+                const card = document.getElementById(`card_${id}`);
+                const errorAlert = document.getElementById(`err_${id}`);
+                if (card) card.classList.add("border-rose-500", "bg-rose-50/10");
+                if (errorAlert) {
+                    errorAlert.querySelector("span").textContent = message;
+                    errorAlert.classList.remove("hidden");
+                }
+                errorCount++;
+                if (!firstErrorElement) firstErrorElement = card;
+            };
+            ["field_start_time", "field_end_time"].forEach(id => {
+                const el = document.getElementById(id);
+                if (el && el.dataset.partial) markFieldError(id, "時と分の両方を選んでください");
+            });
+            const startTime = currentSubmission.answers["field_start_time"];
+            const endTime = currentSubmission.answers["field_end_time"];
+            if (startTime && endTime && endTime <= startTime) markFieldError("field_end_time", "開始時間より後の時刻を選んでください");
+
             if (errorCount > 0) {
-                showNotification("未入力の必須項目があります。画面を確認してください。", "error");
+                showNotification("未入力の必須項目か、入力内容の誤りがあります。画面を確認してください。", "error");
                 if (firstErrorElement) {
                     firstErrorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
