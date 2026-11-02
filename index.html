@@ -761,6 +761,7 @@
                             otherInput.value = currentSubmission.otherDetails[field.id] || "";
                             otherInput.oninput = (e) => {
                                 currentSubmission.otherDetails[field.id] = e.target.value;
+                                clearFieldWarning(field.id);
                             };
                             row.appendChild(otherInput);
                         }
@@ -834,6 +835,7 @@
                             otherInput.value = currentSubmission.otherDetails[field.id] || "";
                             otherInput.oninput = (e) => {
                                 currentSubmission.otherDetails[field.id] = e.target.value;
+                                clearFieldWarning(field.id);
                             };
                             row.appendChild(otherInput);
                         }
@@ -903,6 +905,25 @@
                 if (errorAlert) {
                     errorAlert.classList.add("hidden");
                     errorAlert.querySelector("span").textContent = "この質問は必須です";
+                }
+
+                if (errorAlert) errorAlert.querySelector("span").textContent = "この質問は必須です";
+                // 「その他」を選んだときは、内容の記入欄も必須
+                if ((field.type === "radio" || field.type === "checkbox") && val) {
+                    const picked = Array.isArray(val) ? val : [val];
+                    const detail = (currentSubmission.otherDetails[field.id] || "").trim();
+                    if (picked.some(o => o.includes("その他")) && !detail) {
+                        errorCount++;
+                        if (card) {
+                            card.classList.add("border-rose-500", "bg-rose-50/10");
+                            if (!firstErrorElement) firstErrorElement = card;
+                        }
+                        if (errorAlert) {
+                            errorAlert.querySelector("span").textContent = "「その他」の内容を記入してください";
+                            errorAlert.classList.remove("hidden");
+                        }
+                        return;
+                    }
                 }
 
                 if (field.required) {
