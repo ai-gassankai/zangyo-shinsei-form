@@ -568,7 +568,88 @@
             });
         }
 
+        /* ===== 氏名選択後のパスワード確認（3桁）。照合はGAS側で行い、通ると通行証(authToken)を受け取る ===== */
+        let authToken = "";
+        let authPendingName = "";
+
         function selectStaff(name) {
+            authPendingName = name;
+            openAuthModal(name);
+        }
+
+        function openAuthModal(name) {
+            closeAuthModal();
+            const wrap = document.createElement("div");
+            wrap.id = "authModal";
+            wrap.className = "fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/50 px-4";
+            wrap.innerHTML =
+                '<div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">' +
+                '<div class="flex items-center justify-between"><div id="authName" class="font-bold text-slate-900 text-lg"></div>' +
+                '<button type="button" id="authClose" class="text-slate-400 hover:text-slate-600 text-xl leading-none px-2" aria-label="閉じる">×</button></div>' +
+                '<p class="text-sm text-slate-500 text-center">3桁のパスワードを入力してください</p>' +
+                '<input type="password" id="authInput" inputmode="numeric" maxlength="3" autocomplete="off" class="w-full text-center text-3xl tracking-[0.5em] py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">' +
+                '<p id="authMsg" class="text-sm text-rose-600 text-center min-h-[1.25rem]"></p>' +
+                '<button type="button" id="authGo" class="w-full py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 disabled:opacity-50">次へ進む</button>' +
+                '</div>';
+            document.body.appendChild(wrap);
+            document.getElementById("authName").textContent = name;
+            const input = document.getElementById("authInput");
+            input.addEventListener("input", () => { input.value = input.value.replace(/[^0-9]/g, "").slice(0, 3); });
+            input.addEventListener("keydown", (e) => { if (e.key === "Enter") submitAuth(); });
+            document.getElementById("authGo").onclick = submitAuth;
+            document.getElementById("authClose").onclick = closeAuthModal;
+            setTimeout(() => input.focus(), 50);
+        }
+
+        function closeAuthModal() {
+            const m = document.getElementById("authModal");
+            if (m) m.remove();
+        }
+
+        function setAuthMsg(text) {
+            const el = document.getElementById("authMsg");
+            if (el) el.textContent = text;
+        }
+
+        function submitAuth() {
+            const input = document.getElementById("authInput");
+            const go = document.getElementById("authGo");
+            if (!input || go.disabled) return;
+            const pw = input.value;
+            if (pw.length !== 3) { setAuthMsg("3桁の数字を入力してください"); return; }
+            go.disabled = true;
+            setAuthMsg("確認しています…");
+            const url = appState.gasURL + "?action=verify&name=" + encodeURIComponent(authPendingName) + "&pw=" + encodeURIComponent(pw);
+            fetch(url)
+                .then(res => res.json())
+                .then(r => {
+                    go.disabled = false;
+                    if (r.status === "ok" && r.token) {
+                        authToken = r.token;
+                        closeAuthModal();
+                        proceedAfterAuth(authPendingName);
+                    } else if (r.status === "wrong") {
+                        input.value = "";
+                        input.focus();
+                        setAuthMsg("パスワードが違います（あと" + r.remaining + "回）");
+                    } else if (r.status === "locked") {
+                        input.value = "";
+                        setAuthMsg("5回間違えたためロックされています。" + r.minutes + "分後にもう一度お試しください。");
+                    } else if (r.status === "nopw") {
+                        input.disabled = true;
+                        go.disabled = true;
+                        setAuthMsg("パスワードが割り当てられていないため申請できません。管理者の渡邉さんにお問い合わせください。");
+                    } else {
+                        setAuthMsg("確認できませんでした。時間をおいてもう一度お試しください。改善しない場合は管理者の渡邉さんにお問い合わせください。");
+                    }
+                })
+                .catch(() => {
+                    go.disabled = false;
+                    setAuthMsg("通信に失敗しました。電波の良い場所でもう一度お試しください。");
+                });
+        }
+
+        function proceedAfterAuth(name) {
             currentSubmission.name = name;
             document.getElementById("summaryClinic").innerText = currentSubmission.clinic;
             document.getElementById("summaryName").innerText = currentSubmission.name;
@@ -1084,6 +1165,7 @@
             saveStateToStorage();
 
             const scriptPacket = {
+                token: authToken,
                 formType: "時間外申請",
                 timestamp: timestamp,
                 clinic: currentSubmission.clinic,
@@ -1120,6 +1202,7 @@
         }
 
         function resetForm() {
+            authToken = "";
             resetCurrentSubmissionAnswers();
             goToStep(1);
         }
