@@ -587,6 +587,7 @@
                 '<div class="flex items-center justify-between"><div id="authName" class="font-bold text-slate-900 text-lg"></div>' +
                 '<button type="button" id="authClose" class="text-slate-400 hover:text-slate-600 text-xl leading-none px-2" aria-label="閉じる">×</button></div>' +
                 '<p class="text-sm text-slate-500 text-center">3桁のパスワードを入力してください</p>' +
+                '<p class="text-xs text-slate-400 text-center -mt-2">勤怠システムの打刻と同じパスワードです<br>（イントラサイトのパスワードの末尾3桁）</p>' +
                 '<input type="password" id="authInput" inputmode="numeric" maxlength="3" autocomplete="off" class="w-full text-center text-3xl tracking-[0.5em] py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">' +
                 '<p id="authMsg" class="text-sm text-rose-600 text-center min-h-[1.25rem]"></p>' +
                 '<button type="button" id="authGo" class="w-full py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 disabled:opacity-50">次へ進む</button>' +
@@ -638,9 +639,9 @@
                     } else if (r.status === "nopw") {
                         input.disabled = true;
                         go.disabled = true;
-                        setAuthMsg("パスワードが割り当てられていないため申請できません。管理者の渡邉さんにお問い合わせください。");
+                        setAuthMsg("パスワードが割り当てられていないため申請できません。管理者の渡邉までお問い合わせください（medivery.llc@gmail.com）。");
                     } else {
-                        setAuthMsg("確認できませんでした。時間をおいてもう一度お試しください。改善しない場合は管理者の渡邉さんにお問い合わせください。");
+                        setAuthMsg("確認できませんでした。時間をおいてもう一度お試しください。改善しない場合は管理者の渡邉までお問い合わせください（medivery.llc@gmail.com）。");
                     }
                 })
                 .catch(() => {
